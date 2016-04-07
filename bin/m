@@ -3,10 +3,13 @@
 M_PREFIX=${M_PREFIX-/usr/local}
 M_DIR=$M_PREFIX/m
 VERSIONS_DIR=$M_DIR/versions
+OPSMANAGER_VERSIONS_DIR=$M_DIR/opsmanager/versions
 BUILD_DIR_BASE=$M_DIR/mongo-
+BUILD_OPSMANAGER_DIR_BASE=$M_DIR/opsmanager-
+
 
 # m version
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 # log path
 LOGPATH="/tmp/m.log"
@@ -30,10 +33,16 @@ abort() {
 # setup
 
 test -d $VERSIONS_DIR || mkdir -p $VERSIONS_DIR
+test -d $OPSMANAGER_VERSIONS_DIR || mkdir -p $OPSMANAGER_VERSIONS_DIR
 
 if ! test -d $VERSIONS_DIR; then
   abort "Failed to create versions directory ($VERSIONS_DIR), do you have permissions to do this?"
 fi
+
+if ! test -d $VERSIONS_DIR; then
+  abort "Failed to create versions directory ($VERSIONS_DIR), do you have permissions to do this?"
+fi
+
 
 # curl / wget support
 
@@ -68,6 +77,9 @@ display_help() {
     m use <version> [args ...]   Execute mongod <version> with [args ...]
     m shard <version> [args ...] Execute mongos <version> with [args ...]
     m shell <version> [args ...] Open a mongo shell <version> with [args ...]
+    m opsmanager                 Output opsmanager installation present
+    m opsmanager latest          Download or activate the latest opsmanger release
+    m opsmanager <version>       Download or activate the <version> opsmanger release
     m bin <version>              Output bin path for <version>
     m rm <version ...>           Remove the given version(s)
     m --latest                   Output the latest mongodb version available
@@ -123,6 +135,13 @@ check_current_version() {
   fi
 }
 
+check_current_opsmanager_version() {
+  if [ -d "$M_PREFIX/m/opsmanager-current" ]; then
+    fullpath=`ls -l /usr/local/m/opsmanager-current`
+    active=${fullpath: -11}
+  fi
+}
+
 #
 # Display current mongodb --version
 # and others installed.
@@ -131,15 +150,37 @@ check_current_version() {
 display_versions() {
   check_current_version
   local versions=`ls -1 $VERSIONS_DIR | sort -t. -k 1,1n -k 2,2n -k 3,3n`
-  for version in $versions; do
-    local dir="$VERSIONS_DIR/$version"
-    local config=`test -f $dir/.config && cat $dir/.config`
-    if test "$version" = "$active"; then
-      printf "  \033[32mο\033[0m $version \033[90m$config\033[0m\n"
-    else
-      printf "    $version \033[90m$config\033[0m\n"
-    fi
-  done
+  printf "\033[32mο\033[0mmongodb versions: \033[90m$config\033[0m\n"
+  if [ -z "$versions" ]; then
+     printf "    No versions found.\n"
+  else
+    for version in $versions; do
+      local dir="$VERSIONS_DIR/$version"
+      local config=`test -f $dir/.config && cat $dir/.config`
+
+      if test "$version" = "$active"; then
+        printf "  \033[32mο\033[0m $version \033[90m$config\033[0m\n"
+      else
+        printf "    $version \033[90m$config\033[0m\n"
+      fi
+    done
+  fi
+  printf "\033[32mο\033[0mopsmanager versions:\033[90m$config\033[0m\n"
+  check_current_opsmanager_version
+  local ops_versions=`ls -1 $OPSMANAGER_VERSIONS_DIR | sort -t. -k 1,1n -k 2,2n -k 3,3n`
+  if [ -z "$ops_versions" ]; then
+     printf "    No versions found.\n"
+  else
+    for version in $ops_versions; do
+      local dir="$OPSMANAGER_VERSIONS_DIR/$version"
+      local config=`test -f $dir/.config && cat $dir/.config`
+      if test "$version" = "$active"; then
+        printf "  \033[32mο\033[0m $version \033[90m$config\033[0m\n"
+      else
+        printf "    $version \033[90m$config\033[0m\n"
+      fi
+    done
+  fi
 }
 
 #
@@ -167,6 +208,29 @@ install_mongo() {
   else
     prompt_install "MongoDB version $version is not installed."
     install_bin $version $config
+  fi
+}
+
+install_opsmanager() {
+  local version=$1; shift
+  local config=$@
+  check_current_opsmanager_version
+
+  if test "$version" = "$active"; then
+    echo "$version already active"
+    exit 0;
+  fi
+  # activate
+  local dir=$OPSMANAGER_VERSIONS_DIR/$version
+  if test -d $dir; then
+    local deb_pkg="mongodb-mms_${version}_x86_64.deb"
+    cd $dir \
+      && unlink "$M_PREFIX/m/opsmanager-current" \
+      && ln -sf $dir "$M_PREFIX/m/opsmanager-current"
+  # install
+  else
+    prompt_install "OpsManager version $version is not installed."
+    install_opsmanager_bin $version $config
   fi
 }
 
@@ -262,10 +326,87 @@ install_bin() {
     && log "installation complete"
 }
 
+install_opsmanager_bin() {
+  local version=$1
+  local config=$2
+
+
+  # determine url based on os and arch
+
+  local arch=`uname -m`
+  local OS=`uname`
+  local os=`echo $OS | tr '[:upper:]' '[:lower:]'`
+
+  case $os in
+    linux* )
+      os=linux ;;
+    darwin* )
+      os=osx ;;
+    sunos* )
+      os=sunos5 ;;
+    * )
+      bin_not_supported $OS $version $config ;;
+  esac
+
+  # check the download url
+  local deb_pkg="mongodb-mms_${version}_x86_64.deb"
+  local url="https://downloads.mongodb.com/on-prem-mms/deb/$deb_pkg"
+
+  if ! good $url; then
+    log "Not good url '$url'"
+    bin_not_supported $OS $version $config
+    exit 0;
+  fi
+
+  log "installing binary"
+
+  pre install
+
+  # perform the download
+  local builddir="$BUILD_OPSMANAGER_DIR_BASE$version"
+
+  download $version $url $builddir
+
+  # copy binaries to version directory
+  local dir=$OPSMANAGER_VERSIONS_DIR/$version
+  mkdir -p $dir
+
+  mv "$builddir/$deb_pkg" $dir/ \
+    && ln -sf $dir "$M_PREFIX/m/opsmanager-current" \
+    && cleanup "$builddir" \
+    && log "installation complete"
+}
+
 # Install mongodb <version> from source <tarball> [config ...]
 #
 #   m custom 2.3.2 http://downloads.mongodb.org/src/mongodb-src-r2.3.2.tar.gz flags
 #
+
+install_deb() {
+  log "installing from source"
+
+  pre install
+
+  local version=$1
+  local url=$2; shift 2
+  local config=$@
+
+  local builddir="$BUILD_OPSMANAGER_DIR_BASE$version"
+
+  download $version $url $builddir
+
+  local dir=$OPSMANAGER_VERSIONS_DIR/$version
+
+  cd "$builddir" \
+    && scons all \
+    && scons --prefix $dir $config install \
+    && cd .. \
+    && cleanup "$builddir" \
+    && echo $config > "$dir/.config" \
+    && ln -sf $dir "$M_PREFIX/m/opsmanager-current" \
+    && post install \
+    && log "installation complete"
+}
 
 install_tarball() {
   log "installing from source"
@@ -331,8 +472,13 @@ download() {
   mkdir -p $builddir
 
   # fetch and unpack
-  cd $builddir \
-    && $GET $url | tar xz --strip-components=1 > $LOGPATH 2>&1
+  if [ ${url: -4} == ".deb" ]; then
+    cd $builddir \
+      && $GET -O $url   
+  else
+    cd $builddir \
+      && $GET $url | tar xz --strip-components=1 > $LOGPATH 2>&1
+  fi
 
   # see if things are alright
   if test $? -gt 0; then
@@ -668,6 +814,7 @@ else
       c|custom) shift; install_tarball $@; exit ;;
       pre) shift; install_hook pre $@; exit ;;
       post) shift; install_hook post $@; exit ;;
+      opsmanager) shift; install_opsmanager $@; exit ;;
       src) shift; list_src_url $@; exit;;
       *) install_mongo $@; exit ;;
     esac
