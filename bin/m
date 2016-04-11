@@ -150,7 +150,7 @@ check_current_opsmanager_version() {
 display_versions() {
   check_current_version
   local versions=`ls -1 $VERSIONS_DIR | sort -t. -k 1,1n -k 2,2n -k 3,3n`
-  printf "\033[32mο\033[0mmongodb versions: \033[90m$config\033[0m\n"
+  printf "\033[32mο\033[0mMongoDB versions: \033[90m$config\033[0m\n"
   if [ -z "$versions" ]; then
      printf "    No versions found.\n"
   else
@@ -165,7 +165,7 @@ display_versions() {
       fi
     done
   fi
-  printf "\033[32mο\033[0mopsmanager versions:\033[90m$config\033[0m\n"
+  printf "\033[32mο\033[0mOpsManager versions:\033[90m$config\033[0m\n"
   check_current_opsmanager_version
   local ops_versions=`ls -1 $OPSMANAGER_VERSIONS_DIR | sort -t. -k 1,1n -k 2,2n -k 3,3n`
   if [ -z "$ops_versions" ]; then
@@ -367,11 +367,23 @@ install_opsmanager_bin() {
 
   download $version $url $builddir
 
+  #Backup deamon
+  local backup_deb_pkg="mongodb-mms-backup-daemon_${version}_x86_64.deb"
+  local url="https://downloads.mongodb.com/on-prem-mms/deb/$backup_deb_pkg"
+
+  if ! good $url; then
+    log "Warning! No valid backup deamon url for $version ... Skipping..."
+  else
+    # perform the download
+    download $version $url $builddir
+  fi
+
+  
   # copy binaries to version directory
   local dir=$OPSMANAGER_VERSIONS_DIR/$version
   mkdir -p $dir
 
-  mv "$builddir/$deb_pkg" $dir/ \
+  mv "$builddir" $dir/ \
     && ln -sf $dir "$M_PREFIX/m/opsmanager-current" \
     && cleanup "$builddir" \
     && log "installation complete"
@@ -631,6 +643,7 @@ display_latest_stable_version() {
 list_versions() {
   check_current_version
   local versions=""
+  printf "\033[32mο\033[0mMongoDB versions: \033[90m$config\033[0m\n"
   versions=`$GET 2> /dev/null http://dl.mongodb.org/dl/src/ \
     | egrep -o '[0-9]+\.[0-9]+\.[0-9]+([-_\.]rc[0-9]+)?' \
     | sort -u -k 1,1n -k 2,2n -k 3,3 -t . \
@@ -647,6 +660,27 @@ list_versions() {
       fi
     fi
   done
+  
+  check_current_opsmanager_version
+  local ops_manager_versions=""
+  printf "\033[32mο\033[0mOpsManager versions: \033[90m$config\033[0m\n"
+  ops_manager_versions=`curl -L -sS https://www.mongodb.com/subscription/downloads/ops-manager  | grep "Ops Manager" | grep DEB | grep -o '<a href=['"'"'"][^"'"'"']*deb*['"'"'"]' | sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' -e 's#https://downloads.mongodb.com/on-prem-mms/deb/mongodb-mms_##' -e 's#_x86_64.deb##' && \
+      curl -L -sS https://www.mongodb.com/subscription/downloads/archived#archived_OnPrem  | grep "Ops Manager" | grep DEB | grep -o '<a href=['"'"'"][^"'"'"']*deb*['"'"'"]' | sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' -e 's#https://downloads.mongodb.com/on-prem-mms/deb/mongodb-mms_##' -e 's#_x86_64.deb##' && \
+      curl -L -sS https://www.mongodb.com/subscription/downloads/ops-manager  | grep "Monitoring" | grep DEB | grep -o '<a href=['"'"'"][^"'"'"']*deb*['"'"'"]' | sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' -e 's#https://downloads.mongodb.com/on-prem-mms/deb/mongodb-mms_##' -e 's#_x86_64.deb##' && \
+      curl -L -sS https://www.mongodb.com/subscription/downloads/archived#archived_OnPrem  | grep Monitoring | grep DEB | grep -o '<a href=['"'"'"][^"'"'"']*deb['"'"'"]' | sed -e 's/^<a href=["'"'"']//' -e 's/["'"'"']$//' -e 's#https://downloads.mongodb.com/on-prem-mms/deb/mongodb-mms_##' -e 's#_x86_64.deb##'`
+  ops_manager_versions=`echo $ops_manager_versions | sort -u -k 1,1n -k 2,2n -k 3,3n -t . `  
+   for v in $ops_manager_versions; do
+    if test "$active" = "$v"; then
+      printf "  \033[32mο\033[0m $v \033[0m\n"
+    else
+      if test -d $OPSMANAGER_VERSIONS_DIR/$v; then
+        printf "  * $v \033[0m\n"
+      else
+        printf "    $v\n"
+      fi
+    fi
+  done
+
 }
 
 #

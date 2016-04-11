@@ -21,9 +21,13 @@ List installed binaries:
 
     $ m
 
+   οMongoDB Versions:
       2.0.6
     ο 2.0.7
       2.2.0-rc2
+
+   οOpsManager Versions:
+    ο 2.0.1.332-1
 
 Use or install the latest official release:
 
@@ -40,6 +44,14 @@ Install a custom or patched version of mongodb from a tarball:
 Install a version of mongodb from source (requires `scons`):
 
     $ m 2.2.3-rc0 source
+
+### Download OpsManager Binaries
+
+Download OpsManager "deb" versions (works with "mlaunch init --opsmanager", the version given becomes the active OpsManager binary once download is complete.
+
+    $ m opsmanager 2.0.1.332-1
+    $ m opsmanager 2.0.2.337-1
+
 
 ### Removing Binaries
 
@@ -123,14 +135,18 @@ Output from `m --help`:
     m use <version> [args ...]   Execute mongod <version> with [args ...]
     m shard <version> [args ...] Execute mongos <version> with [args ...]
     m shell <version> [args ...] Open a mongo shell <version> with [args ...]
+    m opsmanager <version>       Download or activate the <version> opsmanger release
     m bin <version>              Output bin path for <version>
     m rm <version ...>           Remove the given version(s)
     m --latest                   Output the latest mongodb version available
     m --stable                   Output the latest stable mongodb version available
-    m ls                         Output the versions of mongodb available
-    m src <version>              Output the url for source used for the given <version> (useful if installed from source)
-    m pre <event> [script]       Declare one or list scripts to execute before <event> (scripts must use absolute paths)
-    m post <event> [script]      Declare one or list scripts to execute after <event> (scripts must use absolute paths)
+    m ls                         Output the versions of mongodb/OpsManager available
+    m src <version>              Output the url for source used for the given <version>
+                                   (useful if installed from source)
+    m pre <event> [script]       Declare one or list scripts to execute before <event>
+                                   (scripts must use absolute paths)
+    m post <event> [script]      Declare one or list scripts to execute after <event>
+                                   (scripts must use absolute paths)
     m pre <event> rm [script]    Remove pre <event> script
     m post <event> rm [script]   Remove post <event> script
 
