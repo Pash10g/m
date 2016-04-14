@@ -77,14 +77,12 @@ display_help() {
     m use <version> [args ...]   Execute mongod <version> with [args ...]
     m shard <version> [args ...] Execute mongos <version> with [args ...]
     m shell <version> [args ...] Open a mongo shell <version> with [args ...]
-    m opsmanager                 Output opsmanager installation present
-    m opsmanager latest          Download or activate the latest opsmanger release
     m opsmanager <version>       Download or activate the <version> opsmanger release
     m bin <version>              Output bin path for <version>
     m rm <version ...>           Remove the given version(s)
     m --latest                   Output the latest mongodb version available
     m --stable                   Output the latest stable mongodb version available
-    m ls                         Output the versions of mongodb available
+    m ls                         Output the versions of mongodb/OpsManager available
     m src <version>              Output the url for source used for the given <version>
                                    (useful if installed from source)
     m pre <event> [script]       Declare one or list scripts to execute before <event>
@@ -358,7 +356,7 @@ install_opsmanager_bin() {
     exit 0;
   fi
 
-  log "installing binary"
+  log "downloading mongodb-mms binary"
 
   pre install
 
@@ -375,6 +373,7 @@ install_opsmanager_bin() {
     log "Warning! No valid backup deamon url for $version ... Skipping..."
   else
     # perform the download
+    log "downloading mongodb-mms-backup binary"
     download $version $url $builddir
   fi
 
@@ -382,11 +381,12 @@ install_opsmanager_bin() {
   # copy binaries to version directory
   local dir=$OPSMANAGER_VERSIONS_DIR/$version
   mkdir -p $dir
-
-  mv "$builddir" $dir/ \
+set -x
+  mv $builddir/* $dir/ \
+    && { unlink "$M_PREFIX/m/opsmanager-current" 2>/dev/null || true; } \
     && ln -sf $dir "$M_PREFIX/m/opsmanager-current" \
-    && cleanup "$builddir" \
     && log "installation complete"
+set +x
 }
 
 # Install mongodb <version> from source <tarball> [config ...]
